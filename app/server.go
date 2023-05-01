@@ -20,11 +20,16 @@ func main() {
 		os.Exit(1)
 	}
 	defer l.Close()
-	conn, err := l.Accept()
-	if err != nil {
-		fmt.Println("Error accepting connection")
-		os.Exit(1)
+	for {
+		conn, err := l.Accept()
+		if err != nil {
+			fmt.Println("Error accepting connection")
+		}
+		go handleConnection(conn)
 	}
+}
+
+func handleConnection(conn net.Conn) {
 	buff := make([]byte, 50)
 	c := bufio.NewReader(conn)
 
@@ -35,10 +40,11 @@ func main() {
 		if err != nil {
 			if err == io.EOF {
 				fmt.Println("Connection closed")
-				os.Exit(0)
+				conn.Close()
+				break
+			} else {
+				fmt.Println("Error reading from connection")
 			}
-			fmt.Println("Error reading from connection")
-			os.Exit(1)
 		}
 
 		// split the buffer into lines and print them
