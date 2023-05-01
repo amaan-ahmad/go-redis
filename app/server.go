@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -34,7 +35,6 @@ func handleConnection(conn net.Conn) {
 	c := bufio.NewReader(conn)
 
 	for {
-		foundCommand := false
 		// read the full message, or return an error
 		n, err := c.Read(buff)
 		if err != nil {
@@ -50,25 +50,61 @@ func handleConnection(conn net.Conn) {
 		// split the buffer into lines and print them
 		s := string(buff[:n])
 		fmt.Println("Received: ", s)
-		for _, line := range strings.Split(s, "\r\n") {
-			line = strings.ToUpper(strings.TrimSpace(line))
-			if line == "PING" {
-				foundCommand = true
-				clearBuffer(buff)
-				conn.Write([]byte("+PONG\r\n"))
-				break
+
+		inputs := strings.Split(s, "\r\n")
+		size := len(inputs)
+
+		var positions []int
+		for i := 0; i < size; i++ {
+			line := inputs[i]
+			// if line start with * then it is an array of commands [*2, $4, PING, $4, PONG]
+			if strings.HasPrefix(line, "*") {
+				j, err := strconv.Atoi(string(line[1]))
+				if err != nil {
+					fmt.Println("Error reading from connection")
+				}
+				for k := 0; k < j; k++ {
+					positions = append(positions, i+2)
+					i += 2
+				}
 			}
 		}
-		if foundCommand {
-			continue
+		var commands []string
+		for i := 0; i < len(positions); i++ {
+			commands = append(commands, inputs[positions[i]])
 		}
+		fmt.Println(positions, commands)
+
+		response, foundCommand := runCommands(commands)
+
+		fmt.Println("Response: ", foundCommand)
 		clearBuffer(buff)
-		conn.Write([]byte("-ERR unknown command\r\n"))
+
+		conn.Write([]byte(response))
 	}
 }
 
 func clearBuffer(buff []byte) {
 	for i := range buff {
 		buff[i] = 0
+	}
+}
+
+func runCommands(commands []string) (string, bool) {
+	if len(commands) == 0 {
+		return "-ERR Parsing error", false
+	}
+	entryCommand := strings.ToUpper(commands[0])
+	args := commands[1:]
+	switch entryCommand {
+	case "PING":
+		return "+PONG\r\n", true
+	case "ECHO":
+		if len(args) > 1 {
+			return "-ERR wrong number of arguments for 'ECHO' command\r\n", false
+		}
+		return "+" + args[0] + "\r\n", true
+	default:
+		return "-ERR unknown command '" + entryCommand + "'" + "\r\n", false
 	}
 }
