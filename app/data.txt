@@ -1,0 +1,6 @@
+oranges:world
+cat:meow
+es:world
+x:10
+world:oranges
+mangos:apples
